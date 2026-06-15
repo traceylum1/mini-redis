@@ -96,4 +96,52 @@ static Conn *handle_accept(int fd) {
   return conn;
 }
 
+// process 1 request if there is enough data
+static bool try_one_request(Conn *conn) {
+  // try to parse the protocol: message header
+  if (conn->incoming.size() < 4) {
+    return false; // want read
+  }
+  uint32_t len = 0;
+  memcpy(&len, conn->incoming.data(), 4);
+  if (len > k_max_msg) {
+    msg("too long");
+    conn->want_close = true;
+    return false; // want close
+  }
+  // message body
+  if (4 + len > conn->incoming.size()) {
+    return false; // want read
+  }
+  const uint8_t *request = &conn->incoming[4];
+  
+  // got one request, do some application logic
+  printf("client says: len:%d data:%.*s\n",
+    len, len < 100 ? len : 100, request);
+  
+  // generate the response (echo)
+  buf_append(conn->outgoing, (const uint8_t *)&len, 4);
+  buf_append(conn->outgoing, request, len);
+  
+  // application logic done! remove the request message
+  buf_consume(conn->incoming, 4 + len);
+  // Q: Why not just empty the buffer? See the explanation of "pipelining"
+  return true;  // success
+}
 
+// application callback when the socket is writable
+static void handle_write(Conn *conn) {
+  assert(conn->outgoing.size() > 0);
+  ssize_t rv = write(conn->fd, &conn->outgoing[0], conn->outgoing.size());
+  if (rv < 0 && errno == EAGAIN) {
+    return; // actually not ready
+  }
+  if (rv < 0) {
+    msg_errno("write() error");
+    conn->want_close = true;  // error handling
+    return;
+  }
+  
+  // remove written data from 'outgoing'
+  buf_consume(conn->outgoing, (size_t)rv);
+  
