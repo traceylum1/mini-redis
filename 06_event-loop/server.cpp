@@ -41,7 +41,7 @@ static void fd_set_nb(int fd) {
   flags |= O_NONBLOCK;
   
   errno = 0;
-  (void)fnctl(fd, F_SETFL, flags);
+  (void)fcntl(fd, F_SETFL, flags);
   if (errno) {
     die("fcntl error");
   }
@@ -75,7 +75,7 @@ static Conn *handle_accept(int fd) {
   // accept
   struct sockaddr_in client_addr = {};
   socklen_t addrlen = sizeof(client_addr);
-  int connfd = accept(fd, (struct sockaddr *)*client_addr, &addrlen);
+  int connfd = accept(fd, (struct sockaddr *)&client_addr, &addrlen);
   if (connfd < 0) {
     msg_errno("accept() error");
     return NULL;
@@ -84,7 +84,7 @@ static Conn *handle_accept(int fd) {
   fprintf(stderr, "new client from %u.%u.%u.%u:%u\n",
     ip & 255, (ip >> 8) & 255, (ip >> 16) & 255, ip >> 24,
     ntohs(client_addr.sin_port)
-  };
+  );
   
   // set the new connection fd to nonblocking mode
   fd_set_nb(connfd);
@@ -274,7 +274,7 @@ int main() {
     // handle connection sockets
     for (size_t i = 1; i < poll_args.size(); ++i) { // note: skip the 1st
       uint32_t ready = poll_args[i].revents;
-      if (ready == 0} {
+      if (ready == 0) {
         continue;
       }
       
