@@ -49,7 +49,7 @@ static int32_t write_all(int fd, const uint8_t *buf, size_t n) {
 
 // append to the back
 static void buf_append(std::vector<uint8_t> &buf, const uint8_t *data, size_t len) {
-  buf,insert(buf.end(), data, data + len);
+  buf.insert(buf.end(), data, data + len);
 }
 
 const size_t k_max_msg = 32 << 20;  // likely larger than the kernel buffer
@@ -62,6 +62,16 @@ static int32_t send_req(int fd, const uint8_t *text, size_t len) {
   
   std::vector<uint8_t> wbuf;
   buf_append(wbuf, (const uint8_t *)&len, 4);
+  buf_append(wbuf, text, len);
+  return write_all(fd, wbuf.data(), wbuf.size());
+}
+
+static int32_t read_res(int fd) {
+  // 4 bytes header
+  std::vector<uint8_t> rbuf;
+  rbuf.resize(4);
+  errno = 0;
+  int32_t err = read_full(fd, &rbuf[0], 4);
   if (err) {
     if (errno == 0) {
       msg("EOF");
