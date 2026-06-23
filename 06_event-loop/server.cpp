@@ -75,9 +75,9 @@ struct Conn {
 
 // append to the back
 static void buf_append(struct Buffer *buf, const uint8_t *data, size_t n) {
-  uint8_t updated_data_end = buf->data_end + (uint8_t)n;
+  uint8_t *updated_data_end = buf->data_end + n;
   if (updated_data_end > buf->buffer_end) {
-    buf->data_end = updated_data_end - buf->data_end;
+    buf->data_end = updated_data_end - buf->size();
   } else {
     buf->data_end = updated_data_end;
   }
@@ -85,9 +85,9 @@ static void buf_append(struct Buffer *buf, const uint8_t *data, size_t n) {
 
 // remove from the front
 static void buf_consume(struct Buffer *buf, size_t n) {
-  uint8_t updated_data_begin = buf->data_begin + (uint8_t)n;
+  uint8_t *updated_data_begin = buf->data_begin + n;
   if (updated_data_begin > buf->buffer_end) {
-    buf->data_begin = updated_data_begin - buf->buffer_end;
+    buf->data_begin = updated_data_begin - buf->size();
   } else {
     buf->data_begin = updated_data_begin;
   }
