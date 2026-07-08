@@ -1,6 +1,6 @@
 # Mini Redis
 
-A simple Redis clone implemented in C/C++ for the purpose of learning about:
+A simple Redis key-value store implemented in C/C++ for the purpose of learning about:
 
 * Networking
 * Event Loops

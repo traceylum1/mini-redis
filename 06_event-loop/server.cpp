@@ -26,7 +26,7 @@ struct Buffer {
     return *data_end - *data_begin;
   }
   
-  
+
 }
 
 static void msg(const char *msg) {
