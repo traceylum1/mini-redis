@@ -13,9 +13,15 @@
 #include <sys/socket.h>
 #include <netinet/ip.h>
 // C++
+#include <string>
 #include <vector>
+// proj
+#include "hashtable.h"
 
 
+#define container_of(ptr, T, member) \
+    ((T *)( (char *)ptr - offsetof(T, member) ))
+    
 struct Buffer {
   uint8_t *buffer_begin;
   uint8_t *buffer_end;
@@ -117,6 +123,85 @@ static Conn *handle_accept(int fd) {
   conn->want_read = true;
   return conn;
 }
+
+const size_t k_max_args = 200 * 1000;
+
+static bool read_u32(const uint8_t *&cur, const uint8_t *end, uint32_t &out) {
+    if (cur + 4 > end) {
+        return false;
+    }
+    memcpy(&out, cur, 4);
+    cur += 4;
+    return true;
+}
+
+
+static bool read_str(const uint8_t *&cur, const uint8_t *end, size_t n, std::string &out) {
+    if (cur + n > end) {
+        return false;
+    }
+    out.assign(cur, cur + n);
+    cur += n;
+    return true;
+}
+
+// +------+-----+------+-----+------+-----+-----+------+
+// | nstr | len | str1 | len | str2 | ... | len | strn |
+// +------+-----+------+-----+------+-----+-----+------+
+
+static int32_t parse_req(const uint8_t *data, size_t size, std::vector<std::string> &out) {
+    const uint8_t *end = data + size;
+    uint32_t nstr = 0;
+    if (!read_u32(data, end, nstr)) {
+        return -1;
+    }
+    if (nstr > k_max_args) {
+        return -1;  // safety limit
+    }
+
+    while (out.size() < nstr) {
+        uint32_t len = 0;
+        if (!read_u32(data, end, len)) {
+            return -1;
+        }
+        out.push_back(std::string());
+        if (!read_str(data, end, len, out.back())) {
+            return -1;
+        }
+    }
+    if (data != end) {
+        return -1;  // trailing garbage
+    }
+    return 0;
+}
+
+// Response::status
+enum {
+    RES_OK = 0,
+    RES_ERR = 1,    // error
+    RES_NX = 2,     // key not found
+};
+
+// +--------+---------+
+// | status | data... |
+// +--------+---------+
+struct Response {
+    uint32_t status = 0;
+    std::vector<uint8_t> data;
+};
+
+// global states
+static struct {
+    HMap db;    // top-level hashtable
+} g_data;
+
+// KV pair for the top-level hashtable
+struct Entry {
+    struct HNode node;  // hashtable node
+    std::string key;
+    std::string val;
+};
+
 
 // process 1 request if there is enough data
 static bool try_one_request(Conn *conn) {
