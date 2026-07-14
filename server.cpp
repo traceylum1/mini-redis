@@ -1,22 +1,14 @@
 // stdlib
-#include <assert.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
-// system
-#include <fcntl.h>
-#include <poll.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/ip.h>
-// C++
-#include <string>
-#include <vector>
-// proj
-#include "hashtable.h"
+
 
 static void msg(const char *msg) {
   fprintf(stderr, "%s\n", msg);
