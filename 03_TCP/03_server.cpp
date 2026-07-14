@@ -55,7 +55,7 @@ int main() {
 	// Listen
 	rv = listen(fd, SOMAXCONN);
 	if (rv) {
-		 die("listen()");
+		die("listen()");
 	}
 
 	while (true) {
