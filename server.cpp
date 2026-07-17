@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/ip.h>
+#include <assert.h>
 
 #define MAX_MSG_LEN 4096
 
@@ -34,7 +35,7 @@ static void do_something(int connfd) {
   write(connfd, wbuf, strlen(wbuf));
 }
 
-static int32_t full_read(int connfd, void *rbuf, uint32_t n) {
+static int32_t full_read(int connfd, char *rbuf, size_t n) {
   // read expected number of bytes into rbuf
   while (n > 0) {
     ssize_t read_bytes = read(connfd, rbuf, n);
@@ -42,18 +43,37 @@ static int32_t full_read(int connfd, void *rbuf, uint32_t n) {
       return -1; // Early EOF or error
     }
     // decrement bytes to read
-    n -= read_bytes;
-    if (n < 0) {
-      return -1; // Too many bytes read ?
-    }
+    assert((size_t)read_bytes <= n);
+    n -= (size_t)read_bytes;
+    rbuf += read_bytes;
   }
-  // return success -- full msg read
   return 0;
 }
 
-static int32_t full_write(int connf, void *rbuf) {
-  char wbuf[4 + MAX_MSG_LEN];
+static int32_t full_write(int connfd, const char *wbuf, size_t n) {
+  while (n > 0) {
+    ssize_t write_bytes = write(connfd, wbuf, n);
+    if (write_bytes <= 0) {
+      return -1;  // write error
+    }
+    // decrement bytes to write
+    assert((size_t)write_bytes <= n);
+    n -= write_bytes;
+    wbuf += write_bytes;
+  }
+  return 0;
 }
+
+static int32_t handle_response(int connfd, void *rbuf, uint32_t msg_len) {
+  char wbuf[4 + MAX_MSG_LEN];
+  memcpy(wbuf, rbuf, 4 + msg_len);
+  int32_t err = full_write(connfd, wbuf, msg_len);
+  if (err) {
+    msg("Error writing response");
+    return -1;
+  }
+  return 0;
+} 
 
 // handle_request will call full_read() twice -- once to get msg len, then to get msg body
 static int32_t handle_request(int connfd) {
@@ -80,6 +100,9 @@ static int32_t handle_request(int connfd) {
     return -1;  // full_read error
   }
   
+  int32_t err = handle_response(connfd, rbuf, msg_len);
+
+  return 0;
 }
 
 int main() {
