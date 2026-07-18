@@ -63,8 +63,22 @@ static void do_something(int fd) {
 }
 
 static int32_t query(int fd, const char *text) {
-    char wbuf[4 + k_max_msg];
-    memcpy(wbuf, text, )
+    uint32_t len = strlen(text);
+    char wbuf[4 + len];
+    memcpy(wbuf, &len, 4);
+    memcpy(wbuf, &wbuf[4], len);
+    uint32_t err = write_full(fd, wbuf, 4 + len);
+    if (err) {
+        return err;
+    }
+
+    char rbuf[64] = {};
+    ssize_t n = read(fd, rbuf, sizeof(rbuf)-1);
+    if (n < 0) {
+        die("read()");
+    }
+    printf("server says: %s\n", rbuf);
+    return 0;
 }
 
 int main() {
@@ -81,8 +95,13 @@ int main() {
     if (rv) {
         die("connect()");
     }
+    
+    int32_t err = query(fd, "hello");
+    if (err) {
+        return err;
+    }
 
-    do_something(fd);
+    // do_something(fd);
     close(fd);
     return 0;
 }
