@@ -10,8 +10,6 @@
 #include <netinet/ip.h>
 #include <assert.h>
 
-#define MAX_MSG_LEN 4096
-
 static void msg(const char *msg) {
   fprintf(stderr, "%s\n", msg);
 }
@@ -35,7 +33,7 @@ static void do_something(int connfd) {
   write(connfd, wbuf, strlen(wbuf));
 }
 
-static int32_t full_read(int connfd, char *rbuf, size_t n) {
+static int32_t read_full(int connfd, char *rbuf, size_t n) {
   // read expected number of bytes into rbuf
   while (n > 0) {
     ssize_t read_bytes = read(connfd, rbuf, n);
@@ -50,7 +48,7 @@ static int32_t full_read(int connfd, char *rbuf, size_t n) {
   return 0;
 }
 
-static int32_t full_write(int connfd, const char *wbuf, size_t n) {
+static int32_t write_full(int connfd, const char *wbuf, size_t n) {
   while (n > 0) {
     ssize_t write_bytes = write(connfd, wbuf, n);
     if (write_bytes <= 0) {
@@ -64,10 +62,12 @@ static int32_t full_write(int connfd, const char *wbuf, size_t n) {
   return 0;
 }
 
+const size_t k_max_msg = 4096;
+
 static int32_t handle_response(int connfd, void *rbuf, uint32_t msg_len) {
-  char wbuf[4 + MAX_MSG_LEN];
+  char wbuf[4 + k_max_msg];
   memcpy(wbuf, rbuf, 4 + msg_len);
-  int32_t err = full_write(connfd, wbuf, msg_len);
+  int32_t err = write_full(connfd, wbuf, msg_len);
   if (err) {
     msg("Error writing response");
     return -1;
@@ -76,31 +76,35 @@ static int32_t handle_response(int connfd, void *rbuf, uint32_t msg_len) {
 } 
 
 // handle_request will call full_read() twice -- once to get msg len, then to get msg body
-static int32_t handle_request(int connfd) {
-  char rbuf[4 + MAX_MSG_LEN];
+static int32_t one_request(int connfd) {
+  char rbuf[4 + k_max_msg];
+
+  errno = 0;
 
   // Read msg len to first 4 bytes of rbuf
-  int32_t err = full_read(connfd, rbuf, 4);
+  int32_t err = read_full(connfd, rbuf, 4);
   if (err) {
-    return -1;  // full_read error
+    msg(errno == 0 ? "EOF" : "read() error");
+    return err;  // full_read error
   }
 
   // Get total msg len from first 4 bytes read
   uint32_t msg_len = 0;
   memcpy(&msg_len, rbuf, 4);
 
-  if (msg_len > MAX_MSG_LEN) {
+  if (msg_len > k_max_msg) {
+    // fprintf(stdout, "%llu\n", (unsigned long long)msg_len);
     msg("Message body too long");
     return -1;
   }
 
   // Read msg body to rbuf
-  int32_t err = full_read(connfd, &rbuf[4], msg_len);
+  err = read_full(connfd, &rbuf[4], msg_len);
   if (err) {
     return -1;  // full_read error
   }
   
-  int32_t err = handle_response(connfd, rbuf, msg_len);
+  err = handle_response(connfd, rbuf, msg_len);
 
   return 0;
 }
@@ -140,7 +144,14 @@ int main() {
       continue; // error - wait for next connection
     }
 
-    do_something(connfd);
+    while (true) {
+      uint32_t err = one_request(connfd);
+      if (err) {
+        break;
+      }
+    }
+    // do_something(connfd);
+
     close(connfd);
   }
   return 0;

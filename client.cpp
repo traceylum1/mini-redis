@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <netinet/ip.h>
 #include <arpa/inet.h>
+#include <assert.h>
 
 static void msg(const char *msg) {
     fprintf(stderr, "%s\n", msg);
@@ -18,6 +19,37 @@ static void die(const char *msg) {
     abort();
 }
 
+static int32_t read_full(int connfd, char *rbuf, size_t n) {
+  // read expected number of bytes into rbuf
+  while (n > 0) {
+    ssize_t read_bytes = read(connfd, rbuf, n);
+    if (read_bytes <= 0) {
+      return -1; // Early EOF or error
+    }
+    // decrement bytes to read
+    assert((size_t)read_bytes <= n);
+    n -= (size_t)read_bytes;
+    rbuf += read_bytes;
+  }
+  return 0;
+}
+
+static int32_t write_full(int connfd, const char *wbuf, size_t n) {
+  while (n > 0) {
+    ssize_t write_bytes = write(connfd, wbuf, n);
+    if (write_bytes <= 0) {
+      return -1;  // write error
+    }
+    // decrement bytes to write
+    assert((size_t)write_bytes <= n);
+    n -= write_bytes;
+    wbuf += write_bytes;
+  }
+  return 0;
+}
+
+const size_t k_max_msg = 4096;
+
 static void do_something(int fd) {
     char msg[] = "hello";
     write(fd, msg, strlen(msg));
@@ -28,6 +60,11 @@ static void do_something(int fd) {
         die("read()");
     }
     printf("server says: %s\n", rbuf);
+}
+
+static int32_t query(int fd, const char *text) {
+    char wbuf[4 + k_max_msg];
+    memcpy(wbuf, text, )
 }
 
 int main() {
