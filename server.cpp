@@ -103,19 +103,8 @@ static int32_t one_request(int connfd) {
     return -1;  // full_read error
   }
   
-  // err = handle_response(connfd, rbuf, msg_len);
-
-	// do something
-	fprintf(stderr, "client says: %.*s\n", msg_len, &rbuf[4]);
-
-	// reply using the same protocol
-	const char reply[] = "world";
-	char wbuf[4 + sizeof(reply)];
-	msg_len = (uint32_t)strlen(reply);
-	memcpy(wbuf, &msg_len, 4);
-	memcpy(&wbuf[4], reply, msg_len);
-	return write_all(connfd, wbuf, 4 + msg_len);
-
+  err = handle_response(connfd, &rbuf[4], msg_len);
+  
   return 0;
 }
 
