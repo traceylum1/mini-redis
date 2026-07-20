@@ -48,7 +48,7 @@ static int32_t read_full(int connfd, char *rbuf, size_t n) {
   return 0;
 }
 
-static int32_t write_full(int connfd, const char *wbuf, size_t n) {
+static int32_t write_all(int connfd, const char *wbuf, size_t n) {
   while (n > 0) {
     ssize_t write_bytes = write(connfd, wbuf, n);
     if (write_bytes <= 0) {
@@ -67,7 +67,7 @@ const size_t k_max_msg = 4096;
 static int32_t handle_response(int connfd, void *rbuf, uint32_t msg_len) {
   char wbuf[4 + k_max_msg];
   memcpy(wbuf, rbuf, 4 + msg_len);
-  int32_t err = write_full(connfd, wbuf, msg_len);
+  int32_t err = write_all(connfd, wbuf, msg_len);
   if (err) {
     msg("Error writing response");
     return -1;
@@ -89,6 +89,7 @@ static int32_t one_request(int connfd) {
   // Get total msg len from first 4 bytes read
   uint32_t msg_len = 0;
   memcpy(&msg_len, rbuf, 4);
+  fprintf(stdout, "%llu\n", (unsigned long long)msg_len);
 
   if (msg_len > k_max_msg) {
     fprintf(stdout, "%llu\n", (unsigned long long)msg_len);
@@ -113,7 +114,7 @@ static int32_t one_request(int connfd) {
 	msg_len = (uint32_t)strlen(reply);
 	memcpy(wbuf, &msg_len, 4);
 	memcpy(&wbuf[4], reply, msg_len);
-	return write_full(connfd, wbuf, 4 + msg_len);
+	return write_all(connfd, wbuf, 4 + msg_len);
 
   return 0;
 }
