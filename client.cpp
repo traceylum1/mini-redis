@@ -34,7 +34,7 @@ static int32_t read_full(int connfd, char *rbuf, size_t n) {
   return 0;
 }
 
-static int32_t write_full(int connfd, const char *wbuf, size_t n) {
+static int32_t write_all(int connfd, const char *wbuf, size_t n) {
   while (n > 0) {
     ssize_t write_bytes = write(connfd, wbuf, n);
     if (write_bytes <= 0) {
@@ -42,7 +42,7 @@ static int32_t write_full(int connfd, const char *wbuf, size_t n) {
     }
     // decrement bytes to write
     assert((size_t)write_bytes <= n);
-    n -= write_bytes;
+    n -= (size_t)write_bytes;
     wbuf += write_bytes;
   }
   return 0;
@@ -62,24 +62,73 @@ static void do_something(int fd) {
     printf("server says: %s\n", rbuf);
 }
 
-static int32_t query(int fd, const char *text) {
-    uint32_t len = strlen(text);
-    char wbuf[4 + len];
-    memcpy(wbuf, &len, 4);
-    memcpy(wbuf, &wbuf[4], len);
-    uint32_t err = write_full(fd, wbuf, 4 + len);
-    if (err) {
-        return err;
-    }
+// static int32_t query(int fd, const char *text) {
+//     uint32_t len = (uint32_t)strlen(text);
+//     if (len > k_max_msg) {
+//       msg("Message too long");
+//       return -1;
+//     }
 
-    char rbuf[64] = {};
-    ssize_t n = read(fd, rbuf, sizeof(rbuf)-1);
-    if (n < 0) {
-        die("read()");
-    }
-    printf("server says: %s\n", rbuf);
-    return 0;
+//     char wbuf[4 + len];
+//     memcpy(wbuf, &len, 4);
+//     memcpy(&wbuf[4], text, len);
+//     uint32_t err = write_all(fd, wbuf, 4 + len);
+//     if (err) {
+//         return err;
+//     }
+
+//     char rbuf[64] = {};
+//     ssize_t n = read(fd, rbuf, sizeof(rbuf)-1);
+//     if (n < 0) {
+//         die("read()");
+//     }
+//     printf("server says: %s\n", rbuf);
+//     return 0;
+// }
+
+
+static int32_t query(int fd, const char *text) {
+	uint32_t len = (uint32_t)strlen(text);
+	if (len > k_max_msg) {
+		return -1;
+	}
+
+	// send request
+	char wbuf[4 + k_max_msg];
+	memcpy(wbuf, &len, 4); // assume little endian
+	memcpy(&wbuf[4], text, len);
+	if (int32_t err = write_all(fd, wbuf, 4 + len)) {
+		return err;
+	}
+
+	// 4 bytes header
+	char rbuf[4 + k_max_msg + 1];
+	errno = 0;
+	int32_t err = read_full(fd, rbuf, 4);
+	if (err) {
+		msg(errno == 0 ? "EOF" : "read() error");
+		return err;
+	}
+
+	memcpy(&len, rbuf, 4);	// assume little endian
+	if (len > k_max_msg) {
+		msg("too long");
+		return -1;
+	}
+
+	// reply body
+	err = read_full(fd, &rbuf[4], len);
+	if (err) {
+		msg("read() error");
+		return err;
+	}
+
+	// do something
+	printf("server says: %.*s\n", len, &rbuf[4]);
+	return 0;
 }
+
+
 
 int main() {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -98,10 +147,11 @@ int main() {
     
     int32_t err = query(fd, "hello");
     if (err) {
-        return err;
+      goto L_DONE;
     }
 
     // do_something(fd);
+L_DONE:
     close(fd);
     return 0;
 }

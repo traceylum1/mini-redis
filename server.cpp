@@ -21,7 +21,7 @@ static void die(const char *msg) {
 }
 
 static void do_something(int connfd) {
-  char rbuf[64] = {};
+  char rbuf[64];
   ssize_t n = read(connfd, rbuf, sizeof(rbuf)-1);
   if (n < 0) {
     msg("read() error");
@@ -78,9 +78,7 @@ static int32_t handle_response(int connfd, void *rbuf, uint32_t msg_len) {
 // handle_request will call full_read() twice -- once to get msg len, then to get msg body
 static int32_t one_request(int connfd) {
   char rbuf[4 + k_max_msg];
-
   errno = 0;
-
   // Read msg len to first 4 bytes of rbuf
   int32_t err = read_full(connfd, rbuf, 4);
   if (err) {
@@ -93,7 +91,7 @@ static int32_t one_request(int connfd) {
   memcpy(&msg_len, rbuf, 4);
 
   if (msg_len > k_max_msg) {
-    // fprintf(stdout, "%llu\n", (unsigned long long)msg_len);
+    fprintf(stdout, "%llu\n", (unsigned long long)msg_len);
     msg("Message body too long");
     return -1;
   }
@@ -104,7 +102,18 @@ static int32_t one_request(int connfd) {
     return -1;  // full_read error
   }
   
-  err = handle_response(connfd, rbuf, msg_len);
+  // err = handle_response(connfd, rbuf, msg_len);
+
+	// do something
+	fprintf(stderr, "client says: %.*s\n", msg_len, &rbuf[4]);
+
+	// reply using the same protocol
+	const char reply[] = "world";
+	char wbuf[4 + sizeof(reply)];
+	msg_len = (uint32_t)strlen(reply);
+	memcpy(wbuf, &msg_len, 4);
+	memcpy(&wbuf[4], reply, msg_len);
+	return write_full(connfd, wbuf, 4 + msg_len);
 
   return 0;
 }
