@@ -27,7 +27,7 @@ struct Buffer {
   }
   
 
-}
+};
 
 static void msg(const char *msg) {
   fprintf(stderr, "%s\n", msg);

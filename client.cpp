@@ -62,7 +62,6 @@ static void do_something(int fd) {
     printf("server says: %s\n", rbuf);
 }
 
-// MY CODE
 static int32_t query(int fd, const char *text) {
     uint32_t len = (uint32_t)strlen(text);
     if (len > k_max_msg) {
@@ -102,12 +101,16 @@ int main() {
         die("connect()");
     }
     
-    int32_t err = query(fd, "hello");
+    int32_t err = query(fd, "hello1");
     if (err) {
       goto L_DONE;
     }
 
-    // do_something(fd);
+    err = query(fd, "hello2");
+    if (err) {
+      goto L_DONE;
+    }
+
 L_DONE:
     close(fd);
     return 0;
