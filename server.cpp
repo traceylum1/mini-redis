@@ -11,6 +11,7 @@
 #include <assert.h>
 #include <vector>
 #include <poll.h>
+#include <fcntl.h>
 
 // Socket state
 struct Conn {
@@ -28,10 +29,31 @@ static void msg(const char *msg) {
   fprintf(stderr, "%s\n", msg);
 }
 
+static void msg_errno(const char *msg) {
+  fprintf(stderr, "[errno:%d] %s\n", errno, msg);
+}
+
 static void die(const char *msg) {
   int err = errno;
   fprintf(stderr, "[%d] %s\n", err, msg);
   abort();
+}
+
+static void fd_set_nb(int fd) {
+  errno = 0;
+  int flags = fcntl(fd, F_GETFL, 0);
+  if (errno) {
+    die("fcntl error");
+    return;
+  }
+
+  flags |= O_NONBLOCK;
+
+  errno = 0;
+  (void)fcntl(fd, F_SETFL, flags);
+  if (errno) {
+    die("fntl error");
+  }
 }
 
 static int32_t read_full(int connfd, char *rbuf, size_t n) {
@@ -61,6 +83,31 @@ static int32_t write_all(int connfd, const char *wbuf, size_t n) {
     wbuf += write_bytes;
   }
   return 0;
+}
+
+static Conn* handle_accept(int server_fd) {
+  struct sockaddr_in client_addr = {};
+  socklen_t addrlen = sizeof(client_addr);
+  int connfd = accept(server_fd, (struct sockaddr *)&client_addr, &addrlen);
+  if (connfd < 0) {
+    msg_errno("accept() error");
+    return NULL;
+  }
+
+  uint32_t ip = client_addr.sin_addr.s_addr;
+  fprintf(stderr, "new client from %u.%u.%u.%u:%u\n",
+    ip & 255, (ip >> 8) & 255, (ip >> 16) & 255, ip >> 24,
+    ntohs(client_addr.sin_port)
+  );
+
+  // set new connection fd to nonblocking mode
+  fd_set_nb(connfd);
+
+  // create a 'struct Conn' allocated in heap
+  Conn *conn = new Conn();
+  conn->fd = connfd;
+  conn->want_read = true;
+  return conn;
 }
 
 const size_t k_max_msg = 4096;
@@ -147,6 +194,7 @@ int main() {
     struct pollfd pfd = {server_fd, POLLIN, 0};
     poll_args.push_back(pfd);
 
+    // Iterate thru existing conns and create new pollfd objects
     for (Conn *conn : fd2conn) {
       if (!conn) {
         continue;
@@ -155,17 +203,41 @@ int main() {
       if (conn->want_read) {
         pfd.events |= POLLIN;
       }
-      
+      if (conn->want_write) {
+        pfd.events |= POLLOUT;
+      }
       poll_args.push_back(pfd);
     }
 
-    // Accept
-    struct sockaddr_in client_addr = {};
-    socklen_t addrlen = sizeof(client_addr);
-    int connfd = accept(server_fd, (struct sockaddr *)&client_addr, &addrlen);
-    if (connfd < 0) {
-      continue; // error - wait for next connection
+    // Wait for readiness
+    int rv = poll(poll_args.data(), (nfds_t)poll_args.size(), -1);
+    if (rv < 0 && errno == EINTR) {
+      continue; // not an error
     }
+    if (rv < 0) {
+      die("poll()");
+    }
+
+    // handle listening socket
+    if (poll_args[0].revents) {
+      Conn *conn = handle_accept(server_fd);
+      if (conn) {
+        pfd = {conn->fd, POLLIN, 0};
+
+        if (fd2conn.size() <= (size_t)conn->fd) {
+          fd2conn.resize(conn->fd+1);
+        }
+        assert(!fd2conn[conn->fd]);
+        fd2conn[conn->fd] = conn;
+      }
+    }
+
+    // handle connection sockets
+    for (size_t i = 1; i < poll_args.size(); ++i) {
+      
+    }
+
+    
 
     while (true) {
       uint32_t err = one_request(connfd);
