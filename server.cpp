@@ -156,6 +156,14 @@ static int32_t one_request(int connfd) {
   return 0;
 }
 
+static void handle_read(Conn *conn) {
+
+}
+
+static void handle_write(Conn *conn) {
+
+}
+
 int main() {
   // Start listening socket
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -222,8 +230,6 @@ int main() {
     if (poll_args[0].revents) {
       Conn *conn = handle_accept(server_fd);
       if (conn) {
-        pfd = {conn->fd, POLLIN, 0};
-
         if (fd2conn.size() <= (size_t)conn->fd) {
           fd2conn.resize(conn->fd+1);
         }
@@ -232,9 +238,27 @@ int main() {
       }
     }
 
-    // handle connection sockets
+    // handle ready connection sockets
     for (size_t i = 1; i < poll_args.size(); ++i) {
-      
+      uint32_t ready = poll_args[i].revents;
+      if (ready == 0) {
+        continue; // not ready
+      }
+
+      Conn *conn = fd2conn[poll_args[i].fd];
+      if (ready & POLLIN) {
+        assert(conn->want_read == true);
+        handle_read(conn); // application logic
+      }
+      if (ready & POLLOUT) {
+        assert(conn->want_write == true);
+        handle_write(conn); // application logic
+      }
+      if (ready & POLLERR || conn->want_close) {
+        (void)close(conn->fd);
+        fd2conn[conn->fd] = NULL;
+        delete conn;
+      }
     }
 
     
