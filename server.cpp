@@ -157,7 +157,17 @@ static int32_t one_request(int connfd) {
 }
 
 static void handle_read(Conn *conn) {
-
+  char buf[64 + 1024];
+  ssize_t rv = read(conn->fd, buf, sizeof(buf));
+  if (rv < 0 && errno == EAGAIN) {
+    return; // actually not ready
+  }
+  if (rv < 0) {
+    msg_errno("read() error");
+    conn->want_close = true;  // error handling
+    return;
+  }
+  
 }
 
 static void handle_write(Conn *conn) {
