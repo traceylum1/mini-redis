@@ -219,13 +219,12 @@ static void handle_read(Conn *conn) {
   
   buf_append(conn->incoming, buf, (size_t)rv);
 
-  // update readiness intentions
-  while (try_one_request(conn)) {
-    if (conn->outgoing.size() > 0) {
-      conn->want_read = true; // always read for pipelining
-      conn->want_write = true;  // add write intention
-      return handle_write(conn);
-    }
+  while (try_one_request(conn)) { } // loop for request pipelining
+
+  if (conn->outgoing.size() > 0) {  // response ready to be written to client
+    conn->want_read = true; // always read for pipelining
+    conn->want_write = true;  // add write intention
+    return handle_write(conn);
   }
 }
 
