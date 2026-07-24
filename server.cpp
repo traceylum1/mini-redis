@@ -13,6 +13,34 @@
 #include <poll.h>
 #include <fcntl.h>
 
+
+const size_t k_max_msg = 4096;
+
+// Custom circular buffer struct
+struct Buffer {
+  uint8_t buf[4+k_max_msg];
+  uint8_t *buf_start = 0;
+  uint8_t *buf_end = 0;
+  uint8_t *data_start = 0;
+  uint8_t *data_end = 0;
+
+  size_t size() {
+    if (data_start >= data_end) {
+      return (size_t)(data_end - data_start);
+    } else {
+      return (size_t)(4+k_max_msg-data_start + data_end);
+    }
+  }
+
+  bool insert(uint8_t *data, size_t len) {
+    if (size() + len > 4+k_max_msg) {
+      return false;
+    } else {
+
+    }
+  }
+};
+
 // Socket state
 struct Conn {
   int fd = -1;
@@ -29,7 +57,7 @@ static void buf_append(std::vector<uint8_t> &buf, const uint8_t *data, size_t le
 }
 
 static void buf_consume(std::vector<uint8_t> &buf, size_t len) {
-
+  buf.erase(buf.begin(), buf.begin()+len);
 }
 
 
@@ -117,8 +145,6 @@ static Conn* handle_accept(int server_fd) {
   conn->want_read = true;
   return conn;
 }
-
-const size_t k_max_msg = 4096;
 
 static int32_t handle_response(int connfd, void *rbuf, uint32_t msg_len) {
   char wbuf[4 + k_max_msg];
@@ -345,17 +371,6 @@ int main() {
         delete conn;
       }
     }
-
-    
-
-    while (true) {
-      uint32_t err = one_request(connfd);
-      if (err) {
-        break;
-      }
-    }
-
-    close(connfd);
   }
   return 0;
 }
