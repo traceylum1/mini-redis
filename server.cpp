@@ -229,7 +229,24 @@ static void handle_read(Conn *conn) {
 }
 
 static void handle_write(Conn *conn) {
+  assert(conn->outgoing.size() > 0);
+  ssize_t rv = write(conn->fd, conn->outgoing.data(), conn->outgoing.size());
+  if (rv < 0 && errno == EAGAIN) {
+    return;  // not ready yet
+  }
 
+  if (rv < 0) {
+    msg("write() error");
+    conn->want_close = true;
+    return;
+  }
+
+  buf_consume(conn->outgoing, (size_t)rv);
+  if (conn->outgoing.size() == 0) {
+    conn->want_write = false;
+  }
+
+  return;
 }
 
 int main() {
